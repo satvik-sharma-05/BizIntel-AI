@@ -36,20 +36,35 @@ async def chat(
     Intelligent AI Chat endpoint
     Combines documents (RAG), specialized agents, and general AI knowledge
     """
+    print(f"\n{'='*80}")
+    print(f"💬 CHAT REQUEST RECEIVED")
+    print(f"   - User ID: {user_id}")
+    print(f"   - Business ID: {request.business_id}")
+    print(f"   - Message: {request.message}")
+    print(f"   - Mode: {request.mode}")
+    print(f"{'='*80}\n")
+    
     try:
         # Get business details and verify ownership
+        print(f"🔍 Looking up business...")
         business = await collections.businesses().find_one({
             "_id": ObjectId(request.business_id),
             "user_id": user_id
         })
         
         if not business:
+            print(f"❌ Business not found: {request.business_id}")
             raise HTTPException(status_code=404, detail="Business not found")
         
+        print(f"✅ Business found: {business.get('name')}")
+        
         # Get conversation history from MongoDB
+        print(f"📜 Loading conversation history...")
         history_docs = await collections.conversations().find(
             {"business_id": request.business_id}
         ).sort("timestamp", -1).limit(5).to_list(length=5)
+        
+        print(f"✅ Loaded {len(history_docs)} previous messages")
         
         # Format history for LLM
         conversation_history = []
@@ -58,20 +73,37 @@ async def chat(
             conversation_history.append({"role": "assistant", "content": doc.get("response", "")})
         
         # Use intelligent chat service with mode
-        result = await intelligent_chat.process_message(
-            message=request.message,
-            business_id=request.business_id,
-            business=business,
-            conversation_history=conversation_history,
-            mode=request.mode  # Pass mode
-        )
+        print(f"🤖 Processing message with intelligent_chat...")
+        print(f"   - Mode: {request.mode}")
+        
+        try:
+            result = await intelligent_chat.process_message(
+                message=request.message,
+                business_id=request.business_id,
+                business=business,
+                conversation_history=conversation_history,
+                mode=request.mode
+            )
+            print(f"✅ Message processed successfully")
+        except Exception as e:
+            print(f"❌ intelligent_chat.process_message failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
         
         ai_response = result.get("response", "")
         citations = result.get("citations", [])
         agents_used = result.get("agents_used", [])
         rag_used = result.get("rag_used", False)
         
+        print(f"📊 Response stats:")
+        print(f"   - Response length: {len(ai_response)} chars")
+        print(f"   - Citations: {len(citations)}")
+        print(f"   - Agents used: {agents_used}")
+        print(f"   - RAG used: {rag_used}")
+        
         # Format response
+        print(f"📝 Formatting response...")
         structured_response = format_chat_response(ai_response)
         if citations:
             structured_response["citations"] = citations
@@ -80,6 +112,7 @@ async def chat(
         structured_response["sources"] = result.get("sources", {})
         
         # Save to MongoDB
+        print(f"💾 Saving conversation to MongoDB...")
         conversation = {
             "user_id": user_id,
             "business_id": request.business_id,
@@ -96,6 +129,11 @@ async def chat(
         }
         
         inserted = await collections.conversations().insert_one(conversation)
+        print(f"✅ Conversation saved: {inserted.inserted_id}")
+        
+        print(f"\n{'='*80}")
+        print(f"✅ CHAT REQUEST COMPLETE")
+        print(f"{'='*80}\n")
         
         return ChatResponse(
             conversation_id=str(inserted.inserted_id),
@@ -112,7 +150,10 @@ async def chat(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Chat API Error: {str(e)}")
+        print(f"\n{'='*80}")
+        print(f"❌ CHAT API ERROR")
+        print(f"   - Error: {str(e)}")
+        print(f"{'='*80}\n")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
