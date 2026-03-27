@@ -13,8 +13,11 @@ Deploy your entire BizIntel AI platform for **FREE** using:
 ### Issue: "Could not open requirements file"
 **Solution:** Set **Root Directory** to `backend` in Render settings
 
+### Issue: Python 3.14 being used instead of 3.11
+**Solution:** Already fixed! `runtime.txt` in repo root specifies Python 3.11.9
+
 ### Issue: "No matching distribution found for faiss-cpu"
-**Solution:** Already fixed! We use faiss-cpu==1.13.2 (compatible with Python 3.11+)
+**Solution:** Already fixed! We use faiss-cpu==1.13.2 (compatible with Python 3.11)
 
 ### Issue: Backend spins down after 15 minutes
 **Solution:** This is normal on free tier. First request takes 30-60s to wake up.
@@ -99,11 +102,13 @@ Deploy your entire BizIntel AI platform for **FREE** using:
    Branch: main
    Root Directory: backend          ⚠️ IMPORTANT: Must be "backend"
    Runtime: Python 3
-   Build Command: pip install -r requirements.txt
+   Build Command: pip install --upgrade pip && pip install -r requirements.txt
    Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
    ```
 
 4. **Select Free Plan** (scroll down)
+
+**Note:** Python 3.11.9 is automatically used via `runtime.txt` in repo root
 
 ### C. Add Environment Variables
 
