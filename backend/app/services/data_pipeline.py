@@ -45,14 +45,17 @@ class DataPipeline:
                 "economic_indicators": economic_indicators
             }
             
-            # Store in MongoDB
-            await api_cache.insert_one({
-                "cache_key": "economic_indicators",
-                "data": data,
-                "created_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + self.cache_duration,
-                "source": "data.gov.in"
-            })
+            # Store in MongoDB (upsert to avoid duplicate key errors)
+            await api_cache.update_one(
+                {"cache_key": "economic_indicators"},
+                {"$set": {
+                    "data": data,
+                    "created_at": datetime.utcnow(),
+                    "expires_at": datetime.utcnow() + self.cache_duration,
+                    "source": "data.gov.in"
+                }},
+                upsert=True
+            )
             
             return data
         
@@ -89,14 +92,17 @@ class DataPipeline:
                 msme_count = get_msme_data()
                 data = {"total": msme_count}
             
-            # Store in MongoDB
-            await api_cache.insert_one({
-                "cache_key": cache_key,
-                "data": data,
-                "created_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + self.cache_duration,
-                "source": "data.gov.in"
-            })
+            # Store in MongoDB (upsert to avoid duplicate key errors)
+            await api_cache.update_one(
+                {"cache_key": cache_key},
+                {"$set": {
+                    "data": data,
+                    "created_at": datetime.utcnow(),
+                    "expires_at": datetime.utcnow() + self.cache_duration,
+                    "source": "data.gov.in"
+                }},
+                upsert=True
+            )
             
             return data
         
@@ -127,19 +133,22 @@ class DataPipeline:
         try:
             weather = get_weather_data(city)
             
-            # Store in MongoDB
-            await api_cache.insert_one({
-                "cache_key": cache_key,
-                "data": weather,
-                "created_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + timedelta(hours=6),
-                "source": "openweathermap"
-            })
+            # Store in MongoDB (upsert to avoid duplicate key errors)
+            await api_cache.update_one(
+                {"cache_key": cache_key},
+                {"$set": {
+                    "data": weather,
+                    "created_at": datetime.utcnow(),
+                    "expires_at": datetime.utcnow() + timedelta(hours=6),
+                    "source": "openweathermap"
+                }},
+                upsert=True
+            )
             
             return weather
         
         except Exception as e:
-            print(f"Error fetching weather for {city}: {str(e)}")
+            print(f"Error fetching weather for {city}: {e}")
             cached = await api_cache.find_one(
                 {"cache_key": cache_key},
                 sort=[("created_at", -1)]
@@ -165,14 +174,17 @@ class DataPipeline:
         try:
             news = get_industry_news(query, limit)
             
-            # Store in MongoDB
-            await api_cache.insert_one({
-                "cache_key": cache_key,
-                "data": news,
-                "created_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + timedelta(hours=12),
-                "source": "newsapi"
-            })
+            # Store in MongoDB (upsert to avoid duplicate key errors)
+            await api_cache.update_one(
+                {"cache_key": cache_key},
+                {"$set": {
+                    "data": news,
+                    "created_at": datetime.utcnow(),
+                    "expires_at": datetime.utcnow() + timedelta(hours=12),
+                    "source": "newsapi"
+                }},
+                upsert=True
+            )
             
             return news
         
@@ -209,14 +221,17 @@ class DataPipeline:
             # Extract number from response
             population = int(''.join(filter(str.isdigit, response)))
             
-            # Store in MongoDB permanently
-            await api_cache.insert_one({
-                "cache_key": cache_key,
-                "data": {"population": population, "city": city, "state": state},
-                "created_at": datetime.utcnow(),
-                "expires_at": None,  # Never expires
-                "source": "llm_estimate"
-            })
+            # Store in MongoDB permanently (upsert to avoid duplicate key errors)
+            await api_cache.update_one(
+                {"cache_key": cache_key},
+                {"$set": {
+                    "data": {"population": population, "city": city, "state": state},
+                    "created_at": datetime.utcnow(),
+                    "expires_at": None,  # Never expires
+                    "source": "llm_estimate"
+                }},
+                upsert=True
+            )
             
             return population
         
