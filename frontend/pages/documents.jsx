@@ -118,6 +118,7 @@ export default function Documents() {
                     headers: {
                         'Content-Type': 'multipart/form-data',
                     },
+                    timeout: 60000, // 60 seconds timeout
                 }
             );
 
@@ -137,9 +138,18 @@ export default function Documents() {
         } catch (error) {
             console.error('Upload error:', error);
             setUploadProgress('');
-            toast.error(error.response?.data?.detail || 'Upload failed. Please try again.', {
+
+            let errorMessage = 'Upload failed. Please try again.';
+            if (error.code === 'ECONNABORTED') {
+                errorMessage = 'Upload timed out. Try a smaller file or try again later.';
+            } else if (error.response?.data?.detail) {
+                errorMessage = error.response.data.detail;
+            }
+
+            toast.error(errorMessage, {
                 id: uploadToast,
                 icon: '❌',
+                duration: 5000,
             });
         } finally {
             setUploading(false);

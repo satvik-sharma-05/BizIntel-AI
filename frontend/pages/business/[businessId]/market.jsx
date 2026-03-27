@@ -24,15 +24,28 @@ export default function BusinessMarketAnalysis() {
             const businessData = await businessAPI.get(businessId);
             setBusiness(businessData);
 
-            // Load market analysis
-            const response = await api.get(`/market/analyze/${businessId}`);
-            setAnalysis(response.data);
+            // Load market analysis with timeout handling
+            try {
+                const response = await api.get(`/market/analyze/${businessId}`, {
+                    timeout: 30000 // 30 seconds
+                });
+                setAnalysis(response.data);
+            } catch (analysisError) {
+                console.error('Market analysis error:', analysisError);
+                if (analysisError.code === 'ECONNABORTED') {
+                    toast.error('Market analysis is taking too long. Please try again later.');
+                } else {
+                    toast.error('Failed to load market analysis. Using cached data if available.');
+                }
+                // Set empty analysis to show UI
+                setAnalysis({ market_analysis: null });
+            }
         } catch (error) {
-            console.error('Error loading market analysis:', error);
+            console.error('Error loading data:', error);
             if (error.response?.status === 404) {
                 router.push('/select-business');
             } else {
-                toast.error('Failed to load market analysis');
+                toast.error('Failed to load business data');
             }
         } finally {
             setLoading(false);

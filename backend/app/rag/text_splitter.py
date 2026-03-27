@@ -5,8 +5,8 @@ from typing import List, Dict, Any
 
 def split_text_into_chunks(
     text: str,
-    chunk_size: int = 500,
-    chunk_overlap: int = 50,
+    chunk_size: int = 300,  # Reduced from 500
+    chunk_overlap: int = 30,  # Reduced from 50
     page_number: int = 1
 ) -> List[Dict[str, Any]]:
     """
@@ -73,8 +73,8 @@ def split_text_into_chunks(
 
 def split_document_into_chunks(
     document_data: Dict[str, Any],
-    chunk_size: int = 500,
-    chunk_overlap: int = 50
+    chunk_size: int = 300,  # Reduced from 500
+    chunk_overlap: int = 30  # Reduced from 50
 ) -> List[Dict[str, Any]]:
     """
     Split entire document into chunks

@@ -34,8 +34,11 @@ async def upload_document(
     """
     Upload document for RAG system
     Supports: PDF, DOCX, TXT
+    Optimized for Render free tier (30s timeout)
     """
     try:
+        print(f"📤 Starting upload: {file.filename}")
+        
         # Verify business access
         business = await verify_business_access(business_id, user_id)
         
@@ -49,6 +52,7 @@ async def upload_document(
         
         # Read file content
         content = await file.read()
+        print(f"📄 File read: {len(content)} bytes")
         
         # Validate file size
         if len(content) > MAX_FILE_SIZE:
@@ -64,21 +68,29 @@ async def upload_document(
         file_path = UPLOAD_DIR / f"{document_id}{file_ext}"
         with open(file_path, "wb") as f:
             f.write(content)
+        print(f"💾 File saved: {file_path}")
         
         # Extract text from document
+        print(f"📖 Extracting text...")
         document_data = load_document(str(file_path))
         
-        # Split into chunks
-        chunks = split_document_into_chunks(document_data, chunk_size=500, chunk_overlap=50)
+        # Split into chunks (smaller chunks = faster)
+        print(f"✂️ Chunking document...")
+        chunks = split_document_into_chunks(document_data, chunk_size=300, chunk_overlap=30)
         
         if not chunks:
             raise HTTPException(status_code=400, detail="No text extracted from document")
         
-        # Generate embeddings
+        print(f"✅ Created {len(chunks)} chunks")
+        
+        # Generate embeddings (this is the slow part)
+        print(f"🧠 Generating embeddings...")
         chunk_texts = [chunk["text"] for chunk in chunks]
         embeddings = generate_embeddings(chunk_texts)
+        print(f"✅ Embeddings generated")
         
         # Store in FAISS vector store
+        print(f"💾 Storing in vector database...")
         vector_store.add_chunks(
             chunks=chunks,
             embeddings=embeddings,
@@ -87,13 +99,14 @@ async def upload_document(
             filename=file.filename
         )
         
-        # Store metadata in MongoDB
+        # Store metadata in MongoDB (skip index creation for speed)
+        print(f"💾 Storing metadata...")
         document_metadata = {
             "document_id": document_id,
             "user_id": user_id,
             "business_id": business_id,
             "filename": file.filename,
-            "file_type": file_ext[1:],  # Remove dot
+            "file_type": file_ext[1:],
             "file_size": len(content),
             "file_path": str(file_path),
             "chunk_count": len(chunks),
@@ -121,6 +134,8 @@ async def upload_document(
         if chunk_metadata_list:
             await collections.rag_chunks().insert_many(chunk_metadata_list)
         
+        print(f"✅ Upload complete: {file.filename}")
+        
         return {
             "success": True,
             "document_id": document_id,
@@ -134,7 +149,7 @@ async def upload_document(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Document upload error: {str(e)}")
+        print(f"❌ Document upload error: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Document upload failed: {str(e)}")

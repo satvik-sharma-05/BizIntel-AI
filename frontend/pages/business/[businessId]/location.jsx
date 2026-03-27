@@ -23,14 +23,28 @@ export default function BusinessLocationIntelligence() {
             const businessData = await businessAPI.get(businessId);
             setBusiness(businessData);
 
-            const response = await api.get(`/location/analyze/${businessId}`);
-            setAnalysis(response.data);
+            // Load location analysis with timeout handling
+            try {
+                const response = await api.get(`/location/analyze/${businessId}`, {
+                    timeout: 30000 // 30 seconds
+                });
+                setAnalysis(response.data);
+            } catch (analysisError) {
+                console.error('Location analysis error:', analysisError);
+                if (analysisError.code === 'ECONNABORTED') {
+                    toast.error('Location analysis is taking too long. Please try again later.');
+                } else {
+                    toast.error('Failed to load location analysis. Using cached data if available.');
+                }
+                // Set empty analysis to show UI
+                setAnalysis(null);
+            }
         } catch (error) {
-            console.error('Error loading location analysis:', error);
+            console.error('Error loading data:', error);
             if (error.response?.status === 404) {
                 router.push('/select-business');
             } else {
-                toast.error('Failed to load location analysis');
+                toast.error('Failed to load business data');
             }
         } finally {
             setLoading(false);
@@ -135,9 +149,9 @@ export default function BusinessLocationIntelligence() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{rec.state}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 py-1 text-xs font-semibold rounded-full ${rec.overall_score > 75 ? 'bg-green-100 text-green-800' :
-                                                    rec.overall_score > 60 ? 'bg-blue-100 text-blue-800' :
-                                                        rec.overall_score > 45 ? 'bg-yellow-100 text-yellow-800' :
-                                                            'bg-red-100 text-red-800'
+                                                rec.overall_score > 60 ? 'bg-blue-100 text-blue-800' :
+                                                    rec.overall_score > 45 ? 'bg-yellow-100 text-yellow-800' :
+                                                        'bg-red-100 text-red-800'
                                                 }`}>
                                                 {rec.overall_score}
                                             </span>
