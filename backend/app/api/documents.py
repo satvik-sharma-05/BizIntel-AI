@@ -87,10 +87,10 @@ async def process_document_background_async(
             chunks = split_document_into_chunks(document_data, chunk_size=300, chunk_overlap=30)
             print(f"✅ [STEP 2/6] Created {len(chunks)} chunks")
             
-            # Limit chunks
-            if len(chunks) > 100:
-                print(f"⚠️ [STEP 2/6] Limiting to 100 chunks (from {len(chunks)}) for performance")
-                chunks = chunks[:100]
+            # Limit chunks for free tier (max 50 chunks to save memory)
+            if len(chunks) > 50:
+                print(f"⚠️ [STEP 2/6] Limiting to 50 chunks (from {len(chunks)}) for free tier memory constraints")
+                chunks = chunks[:50]
         except Exception as e:
             print(f"❌ [STEP 2/6] FAILED: {str(e)}")
             raise

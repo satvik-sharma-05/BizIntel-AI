@@ -18,7 +18,7 @@ def generate_embeddings(texts: List[str], batch_size: int = 50) -> np.ndarray:
     Returns:
         Numpy array of embeddings
     """
-    # Try OpenAI first
+    # Try OpenAI first (NO MEMORY OVERHEAD)
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key:
         try:
@@ -45,27 +45,12 @@ def generate_embeddings(texts: List[str], batch_size: int = 50) -> np.ndarray:
             return embeddings
         
         except Exception as e:
-            print(f"OpenAI embedding error: {str(e)}, falling back to sentence-transformers")
+            print(f"⚠️ OpenAI embedding error: {str(e)}")
+            # Don't fallback to sentence-transformers on free tier - too much memory
+            raise Exception(f"OpenAI embeddings failed and sentence-transformers disabled on free tier: {str(e)}")
     
-    # Fallback to sentence-transformers
-    try:
-        from sentence_transformers import SentenceTransformer
-        
-        print("🧠 Loading sentence-transformers model...")
-        # Load model (cached after first load)
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        
-        print(f"🧠 Generating embeddings for {len(texts)} chunks...")
-        # Generate embeddings in batches
-        embeddings = model.encode(texts, batch_size=batch_size, show_progress_bar=False)
-        
-        print(f"✅ Generated {len(embeddings)} embeddings using sentence-transformers")
-        return embeddings
-    
-    except ImportError:
-        raise Exception("Neither OpenAI nor sentence-transformers available. Install with: pip install openai OR pip install sentence-transformers")
-    except Exception as e:
-        raise Exception(f"Error generating embeddings: {str(e)}")
+    # NO FALLBACK - sentence-transformers uses too much memory on free tier
+    raise Exception("OPENAI_API_KEY not set. Sentence-transformers disabled on free tier due to memory constraints. Please set OPENAI_API_KEY environment variable.")
 
 def generate_single_embedding(text: str) -> np.ndarray:
     """Generate embedding for single text"""
@@ -77,4 +62,6 @@ def get_embedding_dimension() -> int:
     if openai_key:
         return 1536  # text-embedding-3-small dimension
     else:
-        return 384  # all-MiniLM-L6-v2 dimension
+        # Default to OpenAI dimension even if key not set
+        # Sentence-transformers disabled on free tier
+        return 1536
