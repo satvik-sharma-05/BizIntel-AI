@@ -10,13 +10,17 @@ from pathlib import Path
 class VectorStore:
     """FAISS-based vector store for document chunks"""
     
-    def __init__(self, store_path: str = "vector_store"):
+    def __init__(self, store_path: str = None):
         """
         Initialize vector store
         
         Args:
-            store_path: Path to store FAISS index and metadata
+            store_path: Path to store FAISS index and metadata (from .env if not provided)
         """
+        # Use .env configuration
+        if store_path is None:
+            store_path = os.getenv("VECTOR_DB_PATH", "./vector_store")
+        
         self.store_path = Path(store_path)
         self.store_path.mkdir(exist_ok=True)
         

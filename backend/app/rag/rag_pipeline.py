@@ -1,11 +1,12 @@
 """
 RAG Pipeline - Optimized retrieval-augmented generation pipeline
+Uses configuration from .env
 """
 from typing import List, Dict, Any, Optional
 from .embeddings import generate_single_embedding
 from .vector_store import vector_store
 from ..services.llm_service import call_openrouter
-import asyncio
+import os
 
 class RAGPipeline:
     """Optimized RAG pipeline for document-based Q&A"""
@@ -13,13 +14,17 @@ class RAGPipeline:
     def __init__(self):
         self.vector_store = vector_store
         self._embedding_cache = {}  # Cache embeddings for common queries
+        
+        # Load configuration from .env
+        self.top_k = int(os.getenv("RAG_TOP_K", "5"))
+        self.score_threshold = float(os.getenv("RAG_SCORE_THRESHOLD", "0.7"))
     
     def query(
         self,
         question: str,
         business_id: str,
         mode: str = "hybrid",  # "document_only" or "hybrid"
-        top_k: int = 3  # Reduced from 5 for speed
+        top_k: int = None
     ) -> Dict[str, Any]:
         """
         Query RAG system with optimized retrieval
@@ -28,11 +33,15 @@ class RAGPipeline:
             question: User question
             business_id: Business ID for filtering
             mode: "document_only" or "hybrid"
-            top_k: Number of chunks to retrieve (default 3 for speed)
+            top_k: Number of chunks to retrieve (from .env if not provided)
         
         Returns:
             Structured response with answer and citations
         """
+        # Use .env configuration if not provided
+        if top_k is None:
+            top_k = self.top_k
+        
         # Check embedding cache
         cache_key = f"{question}:{business_id}"
         if cache_key in self._embedding_cache:

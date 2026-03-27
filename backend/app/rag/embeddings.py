@@ -63,21 +63,6 @@ def generate_single_embedding(text: str) -> np.ndarray:
     return generate_embeddings([text])[0]
 
 def get_embedding_dimension() -> int:
-    """Get the dimension of embeddings"""
+    """Get the dimension of embeddings from .env"""
     embedding_dim = os.getenv("EMBEDDING_DIMENSION", "384")
     return int(embedding_dim)
-
-
-def generate_single_embedding(text: str) -> np.ndarray:
-    """Generate embedding for single text"""
-    return generate_embeddings([text])[0]
-
-def get_embedding_dimension() -> int:
-    """Get the dimension of embeddings based on available provider"""
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if openai_key:
-        return 1536  # text-embedding-3-small dimension
-    else:
-        # Default to OpenAI dimension even if key not set
-        # Sentence-transformers disabled on free tier
-        return 1536
