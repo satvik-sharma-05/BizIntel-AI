@@ -27,9 +27,10 @@ async def lifespan(app: FastAPI):
     
     try:
         neo4j_client.connect()
-        print("✅ Neo4j Connected")
+        if neo4j_client.connected:
+            print("✅ Neo4j Connected")
     except Exception as e:
-        print(f"⚠️  Neo4j connection failed (will retry): {e}")
+        print(f"⚠️  Neo4j connection failed (optional feature): {e}")
     
     print("=" * 80)
     print(f"✅ Server ready and listening")

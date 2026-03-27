@@ -16,6 +16,12 @@ class Neo4jClient:
     def connect(self):
         """Connect to Neo4j database"""
         try:
+            # Check if credentials are provided
+            if not settings.NEO4J_URI or not settings.NEO4J_PASSWORD:
+                print("⚠️  Neo4j credentials not configured - skipping")
+                self.connected = False
+                return
+            
             self.driver = GraphDatabase.driver(
                 settings.NEO4J_URI,
                 auth=(settings.neo4j_username, settings.NEO4J_PASSWORD)
@@ -26,14 +32,30 @@ class Neo4jClient:
             self.connected = True
             print("✅ Neo4j connected")
         except Exception as e:
-            print(f"❌ Neo4j connection failed: {e}")
+            print(f"⚠️  Neo4j connection failed (optional feature): {e}")
             self.connected = False
     
     def close(self):
         """Close Neo4j connection"""
         if self.driver:
-            self.driver.close()
-            print("👋 Neo4j disconnected")
+            try:
+                self.driver.close()
+                print("👋 Neo4j disconnected")
+            except Exception as e:
+                print(f"⚠️  Neo4j disconnect error: {e}")
+    
+    def run_query(self, query: str, parameters: Dict[str, Any] = None):
+        """Run a custom Cypher query"""
+        if not self.connected:
+            return None
+        
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, parameters or {})
+                return [dict(record) for record in result]
+        except Exception as e:
+            print(f"Neo4j query error: {e}")
+            return None
     
     def create_business_node(self, business_data: Dict[str, Any]):
         """Create business node in graph"""
