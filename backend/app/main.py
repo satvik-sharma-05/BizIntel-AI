@@ -4,26 +4,13 @@ from app.config.settings import settings
 from app.database.mongodb import connect_mongodb, close_mongodb
 from app.database.neo4j_client import neo4j_client
 from app.api import chat, dashboard, business, auth, system, agents, location, market, forecast, documents
+from contextlib import asynccontextmanager
 import uvicorn
 
-app = FastAPI(
-    title=settings.APP_NAME,
-    description="Business Decision Intelligence Platform - MongoDB Only",
-    version="1.0.0"
-)
-
-# CORS - Allow all origins for now (can restrict later)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Startup
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
     print("=" * 80)
     print(f"🚀 {settings.APP_NAME} Backend Starting...")
     print(f"📍 Backend URL: {settings.BACKEND_URL}")
@@ -31,7 +18,7 @@ async def startup_event():
     print(f"🔧 Debug Mode: {settings.DEBUG}")
     print("=" * 80)
     
-    # Connect to databases in background (non-blocking)
+    # Connect to databases
     try:
         await connect_mongodb()
         print("✅ MongoDB Connected")
@@ -49,16 +36,32 @@ async def startup_event():
     print(f"💾 Databases: MongoDB + Neo4j + FAISS")
     print(f"📡 Health check: {settings.BACKEND_URL}/health")
     print("=" * 80)
-
-# Shutdown
-@app.on_event("shutdown")
-async def shutdown_event():
+    
+    yield  # Server runs here
+    
+    # Shutdown
     print("=" * 80)
     print("👋 Backend Shutting Down...")
     print("=" * 80)
     await close_mongodb()
     neo4j_client.close()
     print("✅ Shutdown complete")
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="Business Decision Intelligence Platform - MongoDB Only",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS - Allow all origins for now (can restrict later)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Routes
 app.include_router(auth.router, prefix="/api", tags=["Authentication"])
