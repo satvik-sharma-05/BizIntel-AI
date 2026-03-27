@@ -33,6 +33,7 @@ yarn-error.log*
 *.swp
 *.swo
 *~
+.kiro/
 
 # OS
 .DS_Store
@@ -46,21 +47,6 @@ backend/backend/vector_store/
 logs/
 *.db
 *.sqlite
-
-# Temporary documentation (keep only main docs)
-*_FIXES.md
-*_COMPLETE.md
-*_SUMMARY.md
-*_GUIDE.md
-*_RESULTS.md
-*_SSL_FIX.md
-*_FINAL_FIX.md
-CHECKLIST*.md
-QUICK_REFERENCE.md
-QUICK_START.md
-START_APP.md
-CHAT_PERSISTENCE*.md
-PROJECT_STRUCTURE.md
 
 # Temporary
 *.tmp
