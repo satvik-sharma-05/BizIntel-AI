@@ -23,33 +23,51 @@ def generate_embeddings(texts: List[str], batch_size: int = 50) -> np.ndarray:
     if openai_key:
         try:
             from openai import OpenAI
-            client = OpenAI(api_key=openai_key)
+            import httpx
+            
+            # Create client with timeout
+            client = OpenAI(
+                api_key=openai_key,
+                timeout=httpx.Timeout(60.0, connect=10.0)  # 60s total, 10s connect
+            )
             
             all_embeddings = []
             
             # Process in batches
             for i in range(0, len(texts), batch_size):
                 batch = texts[i:i + batch_size]
-                print(f"🧠 Generating embeddings for batch {i//batch_size + 1}/{(len(texts) + batch_size - 1)//batch_size}")
+                batch_num = i//batch_size + 1
+                total_batches = (len(texts) + batch_size - 1)//batch_size
                 
-                response = client.embeddings.create(
-                    model="text-embedding-3-small",
-                    input=batch
-                )
+                print(f"🧠 Generating embeddings for batch {batch_num}/{total_batches} ({len(batch)} texts)")
                 
-                batch_embeddings = [item.embedding for item in response.data]
-                all_embeddings.extend(batch_embeddings)
+                try:
+                    response = client.embeddings.create(
+                        model="text-embedding-3-small",
+                        input=batch
+                    )
+                    
+                    batch_embeddings = [item.embedding for item in response.data]
+                    all_embeddings.extend(batch_embeddings)
+                    print(f"✅ Batch {batch_num}/{total_batches} complete")
+                    
+                except Exception as batch_error:
+                    print(f"❌ Batch {batch_num} failed: {str(batch_error)}")
+                    raise
             
             embeddings = np.array(all_embeddings)
             print(f"✅ Generated {len(embeddings)} embeddings using OpenAI")
             return embeddings
         
         except Exception as e:
-            print(f"⚠️ OpenAI embedding error: {str(e)}")
+            print(f"❌ OpenAI embedding error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             # Don't fallback to sentence-transformers on free tier - too much memory
-            raise Exception(f"OpenAI embeddings failed and sentence-transformers disabled on free tier: {str(e)}")
+            raise Exception(f"OpenAI embeddings failed: {str(e)}")
     
     # NO FALLBACK - sentence-transformers uses too much memory on free tier
+    print(f"❌ OPENAI_API_KEY not set!")
     raise Exception("OPENAI_API_KEY not set. Sentence-transformers disabled on free tier due to memory constraints. Please set OPENAI_API_KEY environment variable.")
 
 def generate_single_embedding(text: str) -> np.ndarray:
