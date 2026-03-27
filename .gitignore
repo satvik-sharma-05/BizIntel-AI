@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+.next/
+out/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific - Generated at runtime
+backend/uploads/
+backend/vector_store/
+backend/backend/uploads/
+backend/backend/vector_store/
+logs/
+*.db
+*.sqlite
+
+# Temporary documentation (keep only main docs)
+*_FIXES.md
+*_COMPLETE.md
+*_SUMMARY.md
+*_GUIDE.md
+*_RESULTS.md
+*_SSL_FIX.md
+*_FINAL_FIX.md
+CHECKLIST*.md
+QUICK_REFERENCE.md
+QUICK_START.md
+START_APP.md
+CHAT_PERSISTENCE*.md
+PROJECT_STRUCTURE.md
+
+# Temporary
+*.tmp
+*.temp
+.cache/
