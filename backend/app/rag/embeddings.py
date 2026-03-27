@@ -1,15 +1,27 @@
 """
-Embeddings - Generate embeddings for text chunks using OpenAI
+Embeddings - Generate embeddings for text chunks using sentence-transformers
 """
 from typing import List
 import numpy as np
 import os
 
-def generate_embeddings(texts: List[str], batch_size: int = 50) -> np.ndarray:
+# Global model instance (lazy loaded)
+_model = None
+
+def _get_model():
+    """Lazy load the sentence-transformers model"""
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        print(f"🔄 Loading embedding model: {model_name}")
+        _model = SentenceTransformer(model_name)
+        print(f"✅ Model loaded successfully")
+    return _model
+
+def generate_embeddings(texts: List[str], batch_size: int = 32) -> np.ndarray:
     """
-    Generate embeddings for text chunks using OpenAI's text-embedding-3-small
-    Falls back to sentence-transformers if OpenAI is not available
-    Processes in batches for better performance
+    Generate embeddings for text chunks using sentence-transformers
     
     Args:
         texts: List of text chunks
@@ -18,57 +30,43 @@ def generate_embeddings(texts: List[str], batch_size: int = 50) -> np.ndarray:
     Returns:
         Numpy array of embeddings
     """
-    # Try OpenAI first (NO MEMORY OVERHEAD)
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if openai_key:
-        try:
-            from openai import OpenAI
-            import httpx
-            
-            # Create client with timeout
-            client = OpenAI(
-                api_key=openai_key,
-                timeout=httpx.Timeout(60.0, connect=10.0)  # 60s total, 10s connect
-            )
-            
-            all_embeddings = []
-            
-            # Process in batches
-            for i in range(0, len(texts), batch_size):
-                batch = texts[i:i + batch_size]
-                batch_num = i//batch_size + 1
-                total_batches = (len(texts) + batch_size - 1)//batch_size
-                
-                print(f"🧠 Generating embeddings for batch {batch_num}/{total_batches} ({len(batch)} texts)")
-                
-                try:
-                    response = client.embeddings.create(
-                        model="text-embedding-3-small",
-                        input=batch
-                    )
-                    
-                    batch_embeddings = [item.embedding for item in response.data]
-                    all_embeddings.extend(batch_embeddings)
-                    print(f"✅ Batch {batch_num}/{total_batches} complete")
-                    
-                except Exception as batch_error:
-                    print(f"❌ Batch {batch_num} failed: {str(batch_error)}")
-                    raise
-            
-            embeddings = np.array(all_embeddings)
-            print(f"✅ Generated {len(embeddings)} embeddings using OpenAI")
-            return embeddings
+    try:
+        print(f"🧠 Generating embeddings for {len(texts)} texts...")
         
-        except Exception as e:
-            print(f"❌ OpenAI embedding error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            # Don't fallback to sentence-transformers on free tier - too much memory
-            raise Exception(f"OpenAI embeddings failed: {str(e)}")
+        # Get model (lazy loaded)
+        model = _get_model()
+        
+        # Generate embeddings in batches
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            batch_num = i//batch_size + 1
+            total_batches = (len(texts) + batch_size - 1)//batch_size
+            
+            print(f"   Batch {batch_num}/{total_batches}: {len(batch)} texts")
+            batch_embeddings = model.encode(batch, show_progress_bar=False)
+            all_embeddings.append(batch_embeddings)
+        
+        # Concatenate all batches
+        embeddings = np.vstack(all_embeddings)
+        print(f"✅ Generated {len(embeddings)} embeddings (shape: {embeddings.shape})")
+        return embeddings
     
-    # NO FALLBACK - sentence-transformers uses too much memory on free tier
-    print(f"❌ OPENAI_API_KEY not set!")
-    raise Exception("OPENAI_API_KEY not set. Sentence-transformers disabled on free tier due to memory constraints. Please set OPENAI_API_KEY environment variable.")
+    except Exception as e:
+        print(f"❌ Embedding generation error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+def generate_single_embedding(text: str) -> np.ndarray:
+    """Generate embedding for single text"""
+    return generate_embeddings([text])[0]
+
+def get_embedding_dimension() -> int:
+    """Get the dimension of embeddings"""
+    embedding_dim = os.getenv("EMBEDDING_DIMENSION", "384")
+    return int(embedding_dim)
+
 
 def generate_single_embedding(text: str) -> np.ndarray:
     """Generate embedding for single text"""
