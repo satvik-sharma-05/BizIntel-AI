@@ -3,7 +3,7 @@ Vector Store - FAISS vector database for similarity search
 """
 import os
 import pickle
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 from pathlib import Path
 
@@ -22,12 +22,20 @@ class VectorStore:
         
         self.index = None
         self.metadata = []
+        self.dimension = None
+        self._initialized = False
+    
+    def _ensure_initialized(self):
+        """Lazy initialization - only initialize when first used"""
+        if self._initialized:
+            return
         
         # Get dimension from embeddings module
         from .embeddings import get_embedding_dimension
         self.dimension = get_embedding_dimension()
         
         self._load_or_create_index()
+        self._initialized = True
     
     def _load_or_create_index(self):
         """Load existing index or create new one"""
@@ -70,6 +78,8 @@ class VectorStore:
             business_id: Business ID
             filename: Source filename
         """
+        self._ensure_initialized()  # Lazy init
+        
         # Add embeddings to FAISS index
         self.index.add(embeddings.astype('float32'))
         
@@ -105,6 +115,8 @@ class VectorStore:
         Returns:
             List of matching chunks with scores
         """
+        self._ensure_initialized()  # Lazy init
+        
         if len(self.metadata) == 0:
             return []
         
@@ -133,6 +145,8 @@ class VectorStore:
     
     def delete_document(self, document_id: str):
         """Delete all chunks for a document"""
+        self._ensure_initialized()  # Lazy init
+        
         # Remove from metadata
         self.metadata = [m for m in self.metadata if m["document_id"] != document_id]
         
@@ -141,6 +155,8 @@ class VectorStore:
     
     def _rebuild_index(self):
         """Rebuild FAISS index from scratch"""
+        self._ensure_initialized()  # Lazy init
+        
         import faiss
         from .embeddings import generate_embeddings
         
@@ -177,6 +193,8 @@ class VectorStore:
     
     def get_stats(self) -> Dict[str, Any]:
         """Get vector store statistics"""
+        self._ensure_initialized()  # Lazy init
+        
         return {
             "total_chunks": len(self.metadata),
             "total_documents": len(set(m["document_id"] for m in self.metadata)),
