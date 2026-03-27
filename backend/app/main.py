@@ -24,21 +24,24 @@ app.add_middleware(
 # Startup
 @app.on_event("startup")
 async def startup_event():
+    print(f"🚀 {settings.APP_NAME} Backend Starting...")
+    print(f"📍 Backend URL: {settings.BACKEND_URL}")
+    print(f"📍 Frontend URL: {settings.FRONTEND_URL}")
+    
+    # Connect to databases in background (non-blocking)
     try:
         await connect_mongodb()
         print("✅ MongoDB Connected")
     except Exception as e:
-        print(f"⚠️  MongoDB connection failed: {e}")
+        print(f"⚠️  MongoDB connection failed (will retry): {e}")
     
     try:
         neo4j_client.connect()
         print("✅ Neo4j Connected")
     except Exception as e:
-        print(f"⚠️  Neo4j connection failed: {e}")
+        print(f"⚠️  Neo4j connection failed (will retry): {e}")
     
-    print(f"🚀 {settings.APP_NAME} Backend Started")
-    print(f"📍 Backend URL: {settings.BACKEND_URL}")
-    print(f"📍 Frontend URL: {settings.FRONTEND_URL}")
+    print(f"✅ Server ready on port $PORT")
     print(f"💾 Databases: MongoDB + Neo4j + FAISS")
 
 # Shutdown

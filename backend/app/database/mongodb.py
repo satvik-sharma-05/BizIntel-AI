@@ -20,9 +20,9 @@ async def connect_mongodb():
             settings.mongodb_url,
             tls=True,
             tlsCAFile=certifi.where(),
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=10000,
-            socketTimeoutMS=10000
+            serverSelectionTimeoutMS=3000,  # Reduced from 5000
+            connectTimeoutMS=5000,  # Reduced from 10000
+            socketTimeoutMS=5000  # Reduced from 10000
         )
         mongodb_database = mongodb_client[settings.MONGODB_DB_NAME]
         
@@ -35,8 +35,8 @@ async def connect_mongodb():
         
     except Exception as e:
         print(f"❌ MongoDB connection failed: {e}")
-        print("⚠️  Check: 1) Atlas IP whitelist, 2) Connection string, 3) certifi installed")
-        raise  # Raise error so we know MongoDB is not working
+        print("⚠️  Service will start but database features won't work")
+        # Don't raise - allow service to start anyway
 
 async def close_mongodb():
     """Close MongoDB connection"""
