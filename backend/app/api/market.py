@@ -21,10 +21,12 @@ router = APIRouter()
 @router.get("/analyze/{business_id}")
 async def analyze_market(
     business_id: str,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
+    force_refresh: bool = False
 ):
     """
     Comprehensive market analysis for a business
+    Uses cached data if available (< 24 hours old) unless force_refresh=True
     
     Returns:
     - Market demand score
@@ -36,6 +38,35 @@ async def analyze_market(
     try:
         # Verify business access
         business = await verify_business_access(business_id, user_id)
+        
+        # Check for cached analysis (< 24 hours old)
+        if not force_refresh:
+            cached = await collections.market_analysis().find_one(
+                {"business_id": business_id},
+                sort=[("created_at", -1)]
+            )
+            
+            if cached:
+                # Check if less than 24 hours old
+                age_hours = (datetime.utcnow() - cached["created_at"]).total_seconds() / 3600
+                if age_hours < 24:
+                    print(f"✅ Using cached market analysis ({age_hours:.1f} hours old)")
+                    return {
+                        "success": True,
+                        "business_id": business_id,
+                        "business_name": business.get("name"),
+                        "industry": business.get("industry"),
+                        "location": f"{business.get('city')}, {business.get('state')}",
+                        "market_analysis": cached.get("market_analysis", {}),
+                        "structured_analysis": cached.get("structured_analysis", {}),
+                        "graph_insights": cached.get("graph_insights", {}),
+                        "data_sources": cached.get("data_sources", {}),
+                        "cached": True,
+                        "cache_age_hours": round(age_hours, 1),
+                        "message": "Market analysis (cached)"
+                    }
+        
+        print(f"🔄 Generating fresh market analysis for {business.get('name')}")
         
         # Initialize agents
         market_agent = MarketAgent()
@@ -110,15 +141,17 @@ async def analyze_market(
                 print(f"Neo4j graph creation error: {e}")
         
         # Store in MongoDB
-        await collections.market_analysis().insert_one({
+        analysis_doc = {
             "business_id": business_id,
             "user_id": user_id,
             "market_analysis": market_data,
             "structured_analysis": structured_analysis,
             "graph_insights": graph_data,
+            "data_sources": data_result.get("data", {}),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
-        })
+        }
+        await collections.market_analysis().insert_one(analysis_doc)
         
         return {
             "success": True,
@@ -130,6 +163,7 @@ async def analyze_market(
             "structured_analysis": structured_analysis,
             "graph_insights": graph_data,
             "data_sources": data_result.get("data", {}),
+            "cached": False,
             "message": "Market analysis complete"
         }
     

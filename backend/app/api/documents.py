@@ -3,7 +3,7 @@ Document Upload API for RAG System
 Supports PDF, DOCX, TXT files
 Multi-tenant SaaS with business access verification
 """
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
 from ..api.auth import get_current_user_id
 from ..api.business import verify_business_access
 from ..database.mongodb import collections
@@ -16,6 +16,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 import uuid
+import asyncio
 
 router = APIRouter()
 
@@ -25,18 +26,111 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
+async def process_document_background(
+    file_path: str,
+    document_id: str,
+    business_id: str,
+    filename: str,
+    user_id: str
+):
+    """Background task to process document"""
+    try:
+        print(f"🔄 Background processing started: {filename}")
+        print(f"📄 Document ID: {document_id}")
+        
+        # Extract text from document
+        print(f"📖 Extracting text from {filename}...")
+        document_data = load_document(file_path)
+        print(f"✅ Extracted text from {document_data.get('total_pages', 1)} pages")
+        
+        # Split into chunks
+        print(f"✂️ Splitting document into chunks...")
+        chunks = split_document_into_chunks(document_data, chunk_size=300, chunk_overlap=30)
+        print(f"✅ Created {len(chunks)} chunks")
+        
+        # Limit chunks for free tier (max 100 chunks = ~10 pages)
+        if len(chunks) > 100:
+            print(f"⚠️ Limiting to 100 chunks (from {len(chunks)}) for performance")
+            chunks = chunks[:100]
+        
+        # Generate embeddings
+        print(f"🧠 Generating embeddings for {len(chunks)} chunks...")
+        chunk_texts = [chunk["text"] for chunk in chunks]
+        embeddings = generate_embeddings(chunk_texts)
+        print(f"✅ Generated {len(embeddings)} embeddings")
+        
+        # Store in vector store
+        print(f"💾 Storing in vector database...")
+        vector_store.add_chunks(
+            chunks=chunks,
+            embeddings=embeddings,
+            document_id=document_id,
+            business_id=business_id,
+            filename=filename
+        )
+        print(f"✅ Stored in vector database")
+        
+        # Store chunk metadata
+        print(f"💾 Storing chunk metadata in MongoDB...")
+        chunk_metadata_list = []
+        for i, chunk in enumerate(chunks):
+            chunk_metadata_list.append({
+                "chunk_id": f"{document_id}_chunk_{i}",
+                "document_id": document_id,
+                "business_id": business_id,
+                "text": chunk["text"],
+                "page_number": chunk["page_number"],
+                "chunk_index": chunk["chunk_index"],
+                "char_count": chunk["char_count"],
+                "created_at": datetime.utcnow()
+            })
+        
+        if chunk_metadata_list:
+            await collections.rag_chunks().insert_many(chunk_metadata_list)
+        print(f"✅ Stored chunk metadata")
+        
+        # Update document status to completed
+        await collections.documents().update_one(
+            {"document_id": document_id},
+            {"$set": {
+                "status": "completed",
+                "chunk_count": len(chunks),
+                "total_pages": document_data.get("total_pages", 1),
+                "processed_at": datetime.utcnow()
+            }}
+        )
+        
+        print(f"✅ Background processing complete: {filename}")
+        print(f"📊 Final stats: {len(chunks)} chunks, {document_data.get('total_pages', 1)} pages")
+        
+    except Exception as e:
+        print(f"❌ Background processing error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Update status to failed
+        await collections.documents().update_one(
+            {"document_id": document_id},
+            {"$set": {
+                "status": "failed",
+                "error": str(e),
+                "processed_at": datetime.utcnow()
+            }}
+        )
+
 @router.post("/upload/{business_id}")
 async def upload_document(
     business_id: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id)
 ):
     """
-    Upload document for RAG system - Fast response with background processing
+    Upload document for RAG system - Returns immediately, processes in background
     Supports: PDF, DOCX, TXT
     """
     try:
-        print(f"📤 Starting upload: {file.filename}")
+        print(f"📤 Upload started: {file.filename}")
         
         # Verify business access
         business = await verify_business_access(business_id, user_id)
@@ -51,10 +145,11 @@ async def upload_document(
         
         # Read file content
         content = await file.read()
-        print(f"📄 File read: {len(content)} bytes")
+        file_size = len(content)
+        print(f"📄 File read: {file_size} bytes")
         
         # Validate file size
-        if len(content) > MAX_FILE_SIZE:
+        if file_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=400,
                 detail=f"File too large. Maximum size: {MAX_FILE_SIZE / 1024 / 1024}MB"
@@ -63,114 +158,62 @@ async def upload_document(
         # Generate unique document ID
         document_id = str(uuid.uuid4())
         
-        # Save file to disk FIRST (fast operation)
+        # Save file to disk
         file_path = UPLOAD_DIR / f"{document_id}{file_ext}"
         with open(file_path, "wb") as f:
             f.write(content)
         print(f"💾 File saved: {file_path}")
         
-        # Store initial metadata in MongoDB (mark as processing)
+        # Store initial metadata in MongoDB
         document_metadata = {
             "document_id": document_id,
             "user_id": user_id,
             "business_id": business_id,
             "filename": file.filename,
             "file_type": file_ext[1:],
-            "file_size": len(content),
+            "file_size": file_size,
             "file_path": str(file_path),
-            "chunk_count": 0,  # Will update after processing
-            "total_pages": 0,  # Will update after processing
-            "status": "processing",  # New field
+            "chunk_count": 0,
+            "total_pages": 0,
+            "status": "processing",
             "upload_date": datetime.utcnow(),
             "created_at": datetime.utcnow()
         }
         
         await collections.documents().insert_one(document_metadata)
-        print(f"✅ Metadata saved, starting background processing...")
+        print(f"✅ Metadata saved")
         
-        # Return immediately - processing happens in background
-        # Note: In production, use Celery/RQ for true background jobs
-        # For now, we'll do a quick synchronous process with limits
+        # Add background task for processing
+        background_tasks.add_task(
+            process_document_background,
+            str(file_path),
+            document_id,
+            business_id,
+            file.filename,
+            user_id
+        )
+        print(f"🔄 Background task queued")
         
-        try:
-            # Quick processing with limits
-            document_data = load_document(str(file_path))
-            
-            # Limit chunks for speed (max 50 chunks)
-            chunks = split_document_into_chunks(document_data, chunk_size=300, chunk_overlap=30)
-            if len(chunks) > 50:
-                chunks = chunks[:50]  # Limit to first 50 chunks
-                print(f"⚠️ Limited to 50 chunks for speed")
-            
-            print(f"✅ Created {len(chunks)} chunks")
-            
-            # Generate embeddings (this is still slow but limited)
-            chunk_texts = [chunk["text"] for chunk in chunks]
-            embeddings = generate_embeddings(chunk_texts)
-            
-            # Store in vector store
-            vector_store.add_chunks(
-                chunks=chunks,
-                embeddings=embeddings,
-                document_id=document_id,
-                business_id=business_id,
-                filename=file.filename
-            )
-            
-            # Store chunk metadata
-            chunk_metadata_list = []
-            for i, chunk in enumerate(chunks):
-                chunk_metadata_list.append({
-                    "chunk_id": f"{document_id}_chunk_{i}",
-                    "document_id": document_id,
-                    "business_id": business_id,
-                    "text": chunk["text"],
-                    "page_number": chunk["page_number"],
-                    "chunk_index": chunk["chunk_index"],
-                    "char_count": chunk["char_count"],
-                    "created_at": datetime.utcnow()
-                })
-            
-            if chunk_metadata_list:
-                await collections.rag_chunks().insert_many(chunk_metadata_list)
-            
-            # Update document status to completed
-            await collections.documents().update_one(
-                {"document_id": document_id},
-                {"$set": {
-                    "status": "completed",
-                    "chunk_count": len(chunks),
-                    "total_pages": document_data.get("total_pages", 1)
-                }}
-            )
-            
-            print(f"✅ Processing complete: {file.filename}")
-            
-        except Exception as process_error:
-            print(f"❌ Processing error: {str(process_error)}")
-            # Update status to failed
-            await collections.documents().update_one(
-                {"document_id": document_id},
-                {"$set": {"status": "failed", "error": str(process_error)}}
-            )
-        
-        # Return success immediately (even if processing failed)
+        # Return immediately with document_id for status polling
         return {
             "success": True,
             "document_id": document_id,
             "filename": file.filename,
             "file_type": file_ext[1:],
+            "file_size": file_size,
             "status": "processing",
-            "message": "Document uploaded successfully. Processing in background..."
+            "chunk_count": 0,
+            "total_pages": 0,
+            "message": "File uploaded successfully. Processing in background..."
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Document upload error: {str(e)}")
+        print(f"❌ Upload error: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Document upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @router.get("/list/{business_id}")
 async def list_documents(
@@ -199,11 +242,41 @@ async def list_documents(
                     "file_size": doc["file_size"],
                     "chunk_count": doc["chunk_count"],
                     "total_pages": doc["total_pages"],
+                    "status": doc.get("status", "completed"),
                     "upload_date": doc["upload_date"].isoformat()
                 }
                 for doc in documents
             ],
             "total": len(documents)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/status/{document_id}")
+async def get_document_status(
+    document_id: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    """Get processing status of a document"""
+    try:
+        document = await collections.documents().find_one({
+            "document_id": document_id,
+            "user_id": user_id
+        })
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        return {
+            "success": True,
+            "document_id": document_id,
+            "status": document.get("status", "completed"),
+            "chunk_count": document.get("chunk_count", 0),
+            "total_pages": document.get("total_pages", 0),
+            "error": document.get("error")
         }
     
     except HTTPException:

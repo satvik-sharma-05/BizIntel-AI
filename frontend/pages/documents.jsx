@@ -80,36 +80,94 @@ export default function Documents() {
         }
     };
 
+    const pollDocumentStatus = async (documentId, uploadToast) => {
+        const maxAttempts = 60; // Poll for up to 2 minutes
+        let attempts = 0;
+
+        const progressMessages = [
+            '📄 Extracting text from document...',
+            '✂️ Splitting into chunks...',
+            '🧠 Generating embeddings...',
+            '💾 Storing in vector database...',
+            '✅ Finalizing...'
+        ];
+
+        const pollInterval = setInterval(async () => {
+            attempts++;
+
+            // Update progress message
+            const messageIndex = Math.min(Math.floor(attempts / 10), progressMessages.length - 1);
+            setUploadProgress(progressMessages[messageIndex]);
+
+            try {
+                const statusResponse = await api.get(`/documents/status/${documentId}`);
+                const status = statusResponse.data.status;
+
+                if (status === 'completed') {
+                    clearInterval(pollInterval);
+                    setUploadProgress('');
+                    setUploading(false);
+
+                    toast.success(
+                        `✅ Document processed! ${statusResponse.data.chunk_count} chunks from ${statusResponse.data.total_pages} pages`,
+                        {
+                            id: uploadToast,
+                            duration: 4000,
+                        }
+                    );
+
+                    setSelectedFile(null);
+                    loadDocuments();
+                    loadStats();
+                } else if (status === 'failed') {
+                    clearInterval(pollInterval);
+                    setUploadProgress('');
+                    setUploading(false);
+
+                    toast.error(
+                        `❌ Processing failed: ${statusResponse.data.error || 'Unknown error'}`,
+                        {
+                            id: uploadToast,
+                            duration: 5000,
+                        }
+                    );
+
+                    setSelectedFile(null);
+                    loadDocuments();
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(pollInterval);
+                    setUploadProgress('');
+                    setUploading(false);
+
+                    toast.error(
+                        'Processing is taking longer than expected. Check back in a few minutes.',
+                        {
+                            id: uploadToast,
+                            duration: 5000,
+                        }
+                    );
+
+                    setSelectedFile(null);
+                    loadDocuments();
+                }
+            } catch (error) {
+                console.error('Status poll error:', error);
+                // Continue polling even on error
+            }
+        }, 2000); // Poll every 2 seconds
+    };
+
     const handleUpload = async () => {
         if (!selectedFile) return;
 
-        const uploadToast = toast.loading('Starting upload...');
+        const uploadToast = toast.loading('Uploading file...');
 
         try {
             setUploading(true);
-            setUploadProgress('📤 Uploading file...');
+            setUploadProgress('📤 Uploading file to server...');
 
             const formData = new FormData();
             formData.append('file', selectedFile);
-
-            // Simulate progress updates (since we can't get real progress from backend easily)
-            const progressInterval = setInterval(() => {
-                const messages = [
-                    '📤 Uploading file...',
-                    '📄 Extracting text...',
-                    '✂️ Chunking document...',
-                    '🧠 Generating embeddings...',
-                    '💾 Storing in vector database...',
-                    '✅ Finalizing...'
-                ];
-                setUploadProgress(prev => {
-                    const currentIndex = messages.indexOf(prev);
-                    if (currentIndex < messages.length - 1) {
-                        return messages[currentIndex + 1];
-                    }
-                    return prev;
-                });
-            }, 2000);
 
             const response = await api.post(
                 `/documents/upload/${currentBusiness.id}`,
@@ -118,26 +176,23 @@ export default function Documents() {
                     headers: {
                         'Content-Type': 'multipart/form-data',
                     },
-                    timeout: 30000, // 30 seconds - backend returns quickly now
+                    timeout: 30000, // 30 seconds - backend returns quickly
                 }
             );
 
-            clearInterval(progressInterval);
-            setUploadProgress('');
+            // Upload successful, now poll for processing status
+            toast.success('File uploaded! Processing in background...', {
+                id: uploadToast,
+                duration: 2000,
+            });
 
-            toast.success(
-                `✅ Document uploaded! ${response.data.chunk_count} chunks created from ${response.data.total_pages} pages`,
-                {
-                    id: uploadToast,
-                    duration: 4000,
-                }
-            );
-            setSelectedFile(null);
-            loadDocuments();
-            loadStats();
+            // Start polling for status
+            pollDocumentStatus(response.data.document_id, uploadToast);
+
         } catch (error) {
             console.error('Upload error:', error);
             setUploadProgress('');
+            setUploading(false);
 
             let errorMessage = 'Upload failed. Please try again.';
             if (error.code === 'ECONNABORTED') {
@@ -151,8 +206,6 @@ export default function Documents() {
                 icon: '❌',
                 duration: 5000,
             });
-        } finally {
-            setUploading(false);
         }
     };
 
@@ -387,6 +440,7 @@ export default function Documents() {
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase tracking-wider">Filename</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase tracking-wider">Type</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase tracking-wider">Size</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase tracking-wider">Status</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase tracking-wider">Pages</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase tracking-wider">Chunks</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase tracking-wider">Uploaded</th>
@@ -416,6 +470,22 @@ export default function Documents() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-sm text-secondary-600">{formatFileSize(doc.file_size)}</td>
+                                            <td className="px-6 py-4">
+                                                {doc.status === 'processing' ? (
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-info-100 text-info-700">
+                                                        <div className="w-2 h-2 bg-info-600 rounded-full animate-pulse mr-1.5"></div>
+                                                        Processing
+                                                    </span>
+                                                ) : doc.status === 'failed' ? (
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-danger-100 text-danger-700">
+                                                        Failed
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-700">
+                                                        Ready
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 text-sm text-secondary-600">{doc.total_pages}</td>
                                             <td className="px-6 py-4 text-sm text-secondary-600">{doc.chunk_count}</td>
                                             <td className="px-6 py-4 text-sm text-secondary-600">{formatDate(doc.upload_date)}</td>

@@ -5,13 +5,15 @@ from typing import List
 import numpy as np
 import os
 
-def generate_embeddings(texts: List[str]) -> np.ndarray:
+def generate_embeddings(texts: List[str], batch_size: int = 50) -> np.ndarray:
     """
     Generate embeddings for text chunks using OpenAI's text-embedding-3-small
     Falls back to sentence-transformers if OpenAI is not available
+    Processes in batches for better performance
     
     Args:
         texts: List of text chunks
+        batch_size: Number of texts to process at once
     
     Returns:
         Numpy array of embeddings
@@ -23,13 +25,23 @@ def generate_embeddings(texts: List[str]) -> np.ndarray:
             from openai import OpenAI
             client = OpenAI(api_key=openai_key)
             
-            # Generate embeddings using OpenAI
-            response = client.embeddings.create(
-                model="text-embedding-3-small",
-                input=texts
-            )
+            all_embeddings = []
             
-            embeddings = np.array([item.embedding for item in response.data])
+            # Process in batches
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i + batch_size]
+                print(f"🧠 Generating embeddings for batch {i//batch_size + 1}/{(len(texts) + batch_size - 1)//batch_size}")
+                
+                response = client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=batch
+                )
+                
+                batch_embeddings = [item.embedding for item in response.data]
+                all_embeddings.extend(batch_embeddings)
+            
+            embeddings = np.array(all_embeddings)
+            print(f"✅ Generated {len(embeddings)} embeddings using OpenAI")
             return embeddings
         
         except Exception as e:
@@ -39,12 +51,15 @@ def generate_embeddings(texts: List[str]) -> np.ndarray:
     try:
         from sentence_transformers import SentenceTransformer
         
+        print("🧠 Loading sentence-transformers model...")
         # Load model (cached after first load)
         model = SentenceTransformer('all-MiniLM-L6-v2')
         
-        # Generate embeddings
-        embeddings = model.encode(texts, show_progress_bar=False)
+        print(f"🧠 Generating embeddings for {len(texts)} chunks...")
+        # Generate embeddings in batches
+        embeddings = model.encode(texts, batch_size=batch_size, show_progress_bar=False)
         
+        print(f"✅ Generated {len(embeddings)} embeddings using sentence-transformers")
         return embeddings
     
     except ImportError:

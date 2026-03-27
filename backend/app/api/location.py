@@ -19,10 +19,12 @@ router = APIRouter()
 @router.get("/analyze/{business_id}")
 async def analyze_location(
     business_id: str,
-    user_id: str = Depends(get_current_user_id)
+    user_id: str = Depends(get_current_user_id),
+    force_refresh: bool = False
 ):
     """
     Analyze location intelligence for business expansion
+    Uses cached data if available (< 24 hours old) unless force_refresh=True
     
     Returns:
     - Current location analysis
@@ -33,6 +35,35 @@ async def analyze_location(
     try:
         # Verify business access
         business = await verify_business_access(business_id, user_id)
+        
+        # Check for cached analysis (< 24 hours old)
+        if not force_refresh:
+            cached = await collections.location_analysis().find_one(
+                {"business_id": business_id},
+                sort=[("created_at", -1)]
+            )
+            
+            if cached:
+                # Check if less than 24 hours old
+                age_hours = (datetime.utcnow() - cached["created_at"]).total_seconds() / 3600
+                if age_hours < 24:
+                    print(f"✅ Using cached location analysis ({age_hours:.1f} hours old)")
+                    return {
+                        "success": True,
+                        "business_id": business_id,
+                        "business_name": business.get("name"),
+                        "industry": business.get("industry"),
+                        "current_location": cached.get("current_location", {}),
+                        "recommendations": cached.get("recommendations", []),
+                        "structured_analysis": cached.get("structured_analysis", {}),
+                        "total_analyzed": len(cached.get("recommendations", [])),
+                        "data_sources": cached.get("data_sources", {}),
+                        "cached": True,
+                        "cache_age_hours": round(age_hours, 1),
+                        "message": "Location analysis (cached)"
+                    }
+        
+        print(f"🔄 Generating fresh location analysis for {business.get('name')}")
         
         # Initialize agents
         location_agent = LocationAgent()
@@ -69,15 +100,23 @@ async def analyze_location(
         })
         
         # Store in MongoDB
-        await collections.location_analysis().insert_one({
+        data_sources = {
+            "gdp": data_result.get("data", {}).get("gdp", {}),
+            "msme": data_result.get("data", {}).get("msme", {}),
+            "economic_indicators": data_result.get("data", {}).get("economic_indicators", {})
+        }
+        
+        analysis_doc = {
             "business_id": business_id,
             "user_id": user_id,
             "current_location": location_data.get("current_location", {}),
             "recommendations": location_data.get("recommendations", []),
             "structured_analysis": structured_analysis,
+            "data_sources": data_sources,
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
-        })
+        }
+        await collections.location_analysis().insert_one(analysis_doc)
         
         return {
             "success": True,
@@ -88,11 +127,8 @@ async def analyze_location(
             "recommendations": location_data.get("recommendations", []),
             "structured_analysis": structured_analysis,
             "total_analyzed": location_data.get("total_analyzed", 0),
-            "data_sources": {
-                "gdp": data_result.get("data", {}).get("gdp", {}),
-                "msme": data_result.get("data", {}).get("msme", {}),
-                "economic_indicators": data_result.get("data", {}).get("economic_indicators", {})
-            },
+            "data_sources": data_sources,
+            "cached": False,
             "message": "Location analysis complete"
         }
     
