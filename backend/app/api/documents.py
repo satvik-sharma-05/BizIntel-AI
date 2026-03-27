@@ -38,12 +38,12 @@ async def process_document_background(
         print(f"🔄 Background processing started: {filename}")
         print(f"📄 Document ID: {document_id}")
         
-        # Extract text from document
+        # Extract text from document (sync operation)
         print(f"📖 Extracting text from {filename}...")
         document_data = load_document(file_path)
         print(f"✅ Extracted text from {document_data.get('total_pages', 1)} pages")
         
-        # Split into chunks
+        # Split into chunks (sync operation)
         print(f"✂️ Splitting document into chunks...")
         chunks = split_document_into_chunks(document_data, chunk_size=300, chunk_overlap=30)
         print(f"✅ Created {len(chunks)} chunks")
@@ -53,13 +53,13 @@ async def process_document_background(
             print(f"⚠️ Limiting to 100 chunks (from {len(chunks)}) for performance")
             chunks = chunks[:100]
         
-        # Generate embeddings
+        # Generate embeddings (sync operation)
         print(f"🧠 Generating embeddings for {len(chunks)} chunks...")
         chunk_texts = [chunk["text"] for chunk in chunks]
         embeddings = generate_embeddings(chunk_texts)
         print(f"✅ Generated {len(embeddings)} embeddings")
         
-        # Store in vector store
+        # Store in vector store (sync operation)
         print(f"💾 Storing in vector database...")
         vector_store.add_chunks(
             chunks=chunks,
@@ -70,7 +70,7 @@ async def process_document_background(
         )
         print(f"✅ Stored in vector database")
         
-        # Store chunk metadata
+        # Store chunk metadata (async operation)
         print(f"💾 Storing chunk metadata in MongoDB...")
         chunk_metadata_list = []
         for i, chunk in enumerate(chunks):
@@ -89,7 +89,7 @@ async def process_document_background(
             await collections.rag_chunks().insert_many(chunk_metadata_list)
         print(f"✅ Stored chunk metadata")
         
-        # Update document status to completed
+        # Update document status to completed (async operation)
         await collections.documents().update_one(
             {"document_id": document_id},
             {"$set": {
@@ -108,15 +108,18 @@ async def process_document_background(
         import traceback
         traceback.print_exc()
         
-        # Update status to failed
-        await collections.documents().update_one(
-            {"document_id": document_id},
-            {"$set": {
-                "status": "failed",
-                "error": str(e),
-                "processed_at": datetime.utcnow()
-            }}
-        )
+        # Update status to failed (async operation)
+        try:
+            await collections.documents().update_one(
+                {"document_id": document_id},
+                {"$set": {
+                    "status": "failed",
+                    "error": str(e),
+                    "processed_at": datetime.utcnow()
+                }}
+            )
+        except Exception as update_error:
+            print(f"❌ Failed to update error status: {str(update_error)}")
 
 @router.post("/upload/{business_id}")
 async def upload_document(

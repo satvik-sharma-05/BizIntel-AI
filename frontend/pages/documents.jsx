@@ -176,7 +176,7 @@ export default function Documents() {
                     headers: {
                         'Content-Type': 'multipart/form-data',
                     },
-                    timeout: 30000, // 30 seconds - backend returns quickly
+                    timeout: 60000, // 60 seconds for file upload
                 }
             );
 

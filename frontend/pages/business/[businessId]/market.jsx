@@ -288,29 +288,31 @@ export default function BusinessMarketAnalysis() {
                 )}
 
                 {/* Economic Indicators */}
-                <div className="bg-gray-50 rounded-lg p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">Economic Indicators</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white rounded-lg p-4">
-                            <h3 className="text-sm font-medium text-gray-600 mb-2">GDP Growth</h3>
-                            <p className="text-2xl font-bold text-gray-900">
-                                {analysis.data_sources.gdp.growth}%
-                            </p>
-                        </div>
-                        <div className="bg-white rounded-lg p-4">
-                            <h3 className="text-sm font-medium text-gray-600 mb-2">MSME Businesses</h3>
-                            <p className="text-2xl font-bold text-gray-900">
-                                {analysis.data_sources.msme.state?.toLocaleString() || 'N/A'}
-                            </p>
-                        </div>
-                        <div className="bg-white rounded-lg p-4">
-                            <h3 className="text-sm font-medium text-gray-600 mb-2">Inflation Rate</h3>
-                            <p className="text-2xl font-bold text-gray-900">
-                                {analysis.data_sources.economic_indicators.inflation}%
-                            </p>
+                {analysis.data_sources && (
+                    <div className="bg-gray-50 rounded-lg p-6">
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Economic Indicators</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="bg-white rounded-lg p-4">
+                                <h3 className="text-sm font-medium text-gray-600 mb-2">GDP Growth</h3>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {analysis.data_sources?.gdp?.growth || 'N/A'}%
+                                </p>
+                            </div>
+                            <div className="bg-white rounded-lg p-4">
+                                <h3 className="text-sm font-medium text-gray-600 mb-2">MSME Businesses</h3>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {analysis.data_sources?.msme?.state?.toLocaleString() || 'N/A'}
+                                </p>
+                            </div>
+                            <div className="bg-white rounded-lg p-4">
+                                <h3 className="text-sm font-medium text-gray-600 mb-2">Inflation Rate</h3>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {analysis.data_sources?.economic_indicators?.inflation || 'N/A'}%
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         </MainLayout>
     );
