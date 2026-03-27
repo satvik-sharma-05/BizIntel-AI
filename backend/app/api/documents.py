@@ -462,20 +462,28 @@ async def get_document_stats(
             "user_id": user_id
         })
         
-        # Count chunks
+        # Count chunks in MongoDB
         chunk_count = await collections.rag_chunks().count_documents({
             "business_id": business_id
         })
         
-        # Get vector store stats
+        # Get FAISS vector store stats
         vector_stats = vector_store.get_stats()
+        
+        # Get Neo4j stats
+        neo4j_stats = {}
+        if neo4j_rag.client.connected:
+            neo4j_stats = neo4j_rag.get_business_knowledge_graph(business_id)
         
         return {
             "success": True,
             "business_id": business_id,
-            "document_count": doc_count,
-            "chunk_count": chunk_count,
-            "vector_store": vector_stats
+            "mongodb": {
+                "document_count": doc_count,
+                "chunk_count": chunk_count
+            },
+            "faiss": vector_stats,
+            "neo4j": neo4j_stats
         }
     
     except HTTPException:
