@@ -13,6 +13,9 @@ Deploy your entire BizIntel AI platform for **FREE** using:
 ### Issue: "Could not open requirements file"
 **Solution:** Set **Root Directory** to `backend` in Render settings
 
+### Issue: "No matching distribution found for faiss-cpu"
+**Solution:** Already fixed! We use faiss-cpu==1.13.2 (compatible with Python 3.11+)
+
 ### Issue: Backend spins down after 15 minutes
 **Solution:** This is normal on free tier. First request takes 30-60s to wake up.
 
