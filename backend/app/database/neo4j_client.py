@@ -18,7 +18,7 @@ class Neo4jClient:
         try:
             self.driver = GraphDatabase.driver(
                 settings.NEO4J_URI,
-                auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD)
+                auth=(settings.neo4j_username, settings.NEO4J_PASSWORD)
             )
             # Test connection
             with self.driver.session() as session:

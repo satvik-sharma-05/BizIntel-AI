@@ -17,7 +17,7 @@ async def connect_mongodb():
     try:
         # Use certifi for proper SSL certificates
         mongodb_client = AsyncIOMotorClient(
-            settings.MONGODB_URI,
+            settings.mongodb_url,
             tls=True,
             tlsCAFile=certifi.where(),
             serverSelectionTimeoutMS=5000,
