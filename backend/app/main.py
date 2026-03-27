@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config.settings import settings
 from app.database.mongodb import connect_mongodb, close_mongodb
 from app.database.neo4j_client import neo4j_client
-from app.api import chat, dashboard, business, auth, system, agents, location, market, forecast, documents
+from app.api import chat, dashboard, business, auth, system, agents, location, market, forecast, documents, admin
 from contextlib import asynccontextmanager
 import uvicorn
 
@@ -79,6 +79,7 @@ app.include_router(location.router, prefix="/api/location", tags=["Location"])
 app.include_router(market.router, prefix="/api/market", tags=["Market"])
 app.include_router(forecast.router, prefix="/api/forecast", tags=["Forecast"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 @app.get("/")
 async def root():
