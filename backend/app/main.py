@@ -29,12 +29,16 @@ async def lifespan(app: FastAPI):
         neo4j_client.connect()
         if neo4j_client.connected:
             print("✅ Neo4j Connected")
+            
+            # Initialize Neo4j RAG indexes
+            from app.rag.neo4j_rag import neo4j_rag
+            neo4j_rag.create_indexes()
     except Exception as e:
         print(f"⚠️  Neo4j connection failed (optional feature): {e}")
     
     print("=" * 80)
     print(f"✅ Server ready and listening")
-    print(f"💾 Databases: MongoDB + Neo4j + FAISS")
+    print(f"💾 Hybrid RAG: FAISS + BM25 + Neo4j + MongoDB")
     print(f"📡 Health check: {settings.BACKEND_URL}/health")
     print("=" * 80)
     

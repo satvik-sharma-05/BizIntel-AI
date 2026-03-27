@@ -11,6 +11,7 @@ from ..rag.document_loader import load_document
 from ..rag.text_splitter import split_document_into_chunks
 from ..rag.embeddings import generate_embeddings
 from ..rag.vector_store import vector_store
+from ..rag.neo4j_rag import neo4j_rag
 from bson import ObjectId
 from datetime import datetime
 import os
@@ -83,8 +84,8 @@ async def process_document_background(
             traceback.print_exc()
             raise
         
-        # Step 4: Store in vector store
-        print(f"\n[STEP 4/6] 💾 Storing in vector database...")
+        # Step 4: Store in FAISS vector database
+        print(f"\n[STEP 4/7] 💾 Storing in FAISS vector database...")
         try:
             vector_store.add_chunks(
                 chunks=chunks,
@@ -93,15 +94,44 @@ async def process_document_background(
                 business_id=business_id,
                 filename=filename
             )
-            print(f"✅ [STEP 4/6] Stored in vector database")
+            print(f"✅ [STEP 4/7] Stored in FAISS")
         except Exception as e:
-            print(f"❌ [STEP 4/6] FAILED: {str(e)}")
+            print(f"❌ [STEP 4/7] FAILED: {str(e)}")
             import traceback
             traceback.print_exc()
             raise
         
-        # Step 5: Store chunk metadata in MongoDB
-        print(f"\n[STEP 5/6] 💾 Storing chunk metadata in MongoDB...")
+        # Step 5: Store in Neo4j knowledge graph
+        print(f"\n[STEP 5/7] 🕸️  Storing in Neo4j knowledge graph...")
+        try:
+            # Create document node
+            neo4j_rag.add_document(
+                document_id=document_id,
+                business_id=business_id,
+                filename=filename,
+                file_type=document_data.get("file_type", "unknown"),
+                total_pages=document_data.get("total_pages", 1),
+                metadata={"user_id": user_id}
+            )
+            
+            # Create chunk nodes
+            for i, chunk in enumerate(chunks):
+                chunk_id = f"{document_id}_chunk_{i}"
+                neo4j_rag.add_chunk(
+                    chunk_id=chunk_id,
+                    document_id=document_id,
+                    business_id=business_id,
+                    text=chunk["text"],
+                    page_number=chunk["page_number"],
+                    chunk_index=chunk["chunk_index"]
+                )
+            
+            print(f"✅ [STEP 5/7] Stored in Neo4j knowledge graph")
+        except Exception as e:
+            print(f"⚠️  [STEP 5/7] Neo4j storage failed (optional): {str(e)}")
+        
+        # Step 6: Store chunk metadata in MongoDB
+        print(f"\n[STEP 6/7] 💾 Storing chunk metadata in MongoDB...")
         try:
             chunk_metadata_list = []
             for i, chunk in enumerate(chunks):
@@ -120,15 +150,15 @@ async def process_document_background(
             
             if chunk_metadata_list:
                 await collections.rag_chunks().insert_many(chunk_metadata_list)
-                print(f"✅ [STEP 5/6] Stored {len(chunk_metadata_list)} chunk metadata entries")
+                print(f"✅ [STEP 6/7] Stored {len(chunk_metadata_list)} chunk metadata entries")
         except Exception as e:
-            print(f"❌ [STEP 5/6] FAILED: {str(e)}")
+            print(f"❌ [STEP 6/7] FAILED: {str(e)}")
             import traceback
             traceback.print_exc()
             raise
         
-        # Step 6: Update document status
-        print(f"\n[STEP 6/6] 📝 Updating document status to completed...")
+        # Step 7: Update document status
+        print(f"\n[STEP 7/7] 📝 Updating document status to completed...")
         try:
             result = await collections.documents().update_one(
                 {"document_id": document_id},
@@ -139,10 +169,10 @@ async def process_document_background(
                     "processed_at": datetime.utcnow()
                 }}
             )
-            print(f"✅ [STEP 6/6] Document status updated")
+            print(f"✅ [STEP 7/7] Document status updated")
             print(f"   - Matched: {result.matched_count}, Modified: {result.modified_count}")
         except Exception as e:
-            print(f"❌ [STEP 6/6] FAILED: {str(e)}")
+            print(f"❌ [STEP 7/7] FAILED: {str(e)}")
             import traceback
             traceback.print_exc()
             raise

@@ -80,8 +80,8 @@ class IntelligentChat:
             if doc_count == 0:
                 return None
             
-            # Search for relevant documents (FAISS is fast)
-            rag_result = rag_pipeline.query(
+            # Hybrid search: FAISS + BM25 + Neo4j + MongoDB
+            rag_result = await rag_pipeline.query(
                 question=message,
                 business_id=business_id,
                 mode="hybrid",
@@ -494,9 +494,9 @@ Remember: You have access to:
                 "rag_used": False
             }
         
-        # Use RAG pipeline in document-only mode
+        # Use RAG pipeline in document-only mode (hybrid search)
         from ..rag.rag_pipeline import rag_pipeline
-        rag_result = rag_pipeline.query(
+        rag_result = await rag_pipeline.query(
             question=message,
             business_id=business_id,
             mode="document_only",
