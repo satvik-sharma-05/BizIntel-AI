@@ -26,40 +26,14 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
-def process_document_background_sync(
+async def process_document_background(
     file_path: str,
     document_id: str,
     business_id: str,
     filename: str,
     user_id: str
 ):
-    """Background task to process document - SYNC wrapper for async operations"""
-    import asyncio
-    
-    print(f"=" * 80)
-    print(f"🚀 BACKGROUND TASK STARTED (SYNC WRAPPER)")
-    print(f"📄 Filename: {filename}")
-    print(f"📄 Document ID: {document_id}")
-    print(f"=" * 80)
-    
-    # Run the async version
-    try:
-        asyncio.run(process_document_background_async(
-            file_path, document_id, business_id, filename, user_id
-        ))
-    except Exception as e:
-        print(f"❌ Background task wrapper error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-
-async def process_document_background_async(
-    file_path: str,
-    document_id: str,
-    business_id: str,
-    filename: str,
-    user_id: str
-):
-    """Background task to process document - ASYNC implementation"""
+    """Background task to process document - fully async"""
     print(f"=" * 80)
     print(f"🚀 BACKGROUND TASK STARTED")
     print(f"📄 Filename: {filename}")
@@ -288,12 +262,12 @@ async def upload_document(
         
         # Add background task for processing
         print(f"🔄 Queuing background task...")
-        print(f"   - Function: process_document_background_sync")
+        print(f"   - Function: process_document_background")
         print(f"   - File path: {str(file_path)}")
         print(f"   - Document ID: {document_id}")
         
         background_tasks.add_task(
-            process_document_background_sync,
+            process_document_background,
             str(file_path),
             document_id,
             business_id,
