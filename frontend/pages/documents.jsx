@@ -25,6 +25,7 @@ export default function Documents() {
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState('');
     const [stats, setStats] = useState(null);
     const [selectedFile, setSelectedFile] = useState(null);
 
@@ -82,12 +83,33 @@ export default function Documents() {
     const handleUpload = async () => {
         if (!selectedFile) return;
 
-        const uploadToast = toast.loading('Uploading document...');
+        const uploadToast = toast.loading('Starting upload...');
 
         try {
             setUploading(true);
+            setUploadProgress('📤 Uploading file...');
+
             const formData = new FormData();
             formData.append('file', selectedFile);
+
+            // Simulate progress updates (since we can't get real progress from backend easily)
+            const progressInterval = setInterval(() => {
+                const messages = [
+                    '📤 Uploading file...',
+                    '📄 Extracting text...',
+                    '✂️ Chunking document...',
+                    '🧠 Generating embeddings...',
+                    '💾 Storing in vector database...',
+                    '✅ Finalizing...'
+                ];
+                setUploadProgress(prev => {
+                    const currentIndex = messages.indexOf(prev);
+                    if (currentIndex < messages.length - 1) {
+                        return messages[currentIndex + 1];
+                    }
+                    return prev;
+                });
+            }, 2000);
 
             const response = await api.post(
                 `/documents/upload/${currentBusiness.id}`,
@@ -99,15 +121,22 @@ export default function Documents() {
                 }
             );
 
-            toast.success('Document uploaded successfully!', {
-                id: uploadToast,
-                icon: '✅',
-            });
+            clearInterval(progressInterval);
+            setUploadProgress('');
+
+            toast.success(
+                `✅ Document uploaded! ${response.data.chunk_count} chunks created from ${response.data.total_pages} pages`,
+                {
+                    id: uploadToast,
+                    duration: 4000,
+                }
+            );
             setSelectedFile(null);
             loadDocuments();
             loadStats();
         } catch (error) {
             console.error('Upload error:', error);
+            setUploadProgress('');
             toast.error(error.response?.data?.detail || 'Upload failed. Please try again.', {
                 id: uploadToast,
                 icon: '❌',
@@ -300,6 +329,20 @@ export default function Documents() {
                                         <div className="text-xs text-secondary-500">{formatFileSize(selectedFile.size)}</div>
                                     </div>
                                     <CheckCircle className="w-5 h-5 text-success-600" />
+                                </motion.div>
+                            )}
+
+                            {uploading && uploadProgress && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="flex items-center gap-3 p-4 bg-info-50 border border-info-200 rounded-lg"
+                                >
+                                    <div className="w-5 h-5 border-2 border-info-600 border-t-transparent rounded-full animate-spin"></div>
+                                    <div className="flex-1">
+                                        <div className="text-sm font-medium text-info-900">{uploadProgress}</div>
+                                        <div className="text-xs text-info-600">Please wait, this may take a moment...</div>
+                                    </div>
                                 </motion.div>
                             )}
                         </div>
