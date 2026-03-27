@@ -8,6 +8,19 @@ Deploy your entire BizIntel AI platform for **FREE** using:
 
 ---
 
+## ⚠️ Common Issues & Quick Fixes
+
+### Issue: "Could not open requirements file"
+**Solution:** Set **Root Directory** to `backend` in Render settings
+
+### Issue: Backend spins down after 15 minutes
+**Solution:** This is normal on free tier. First request takes 30-60s to wake up.
+
+### Issue: Frontend can't connect to backend
+**Solution:** Check `NEXT_PUBLIC_API_URL` in Vercel environment variables
+
+---
+
 ## 📋 Prerequisites
 
 - GitHub account
@@ -81,7 +94,7 @@ Deploy your entire BizIntel AI platform for **FREE** using:
    Name: bizintel-backend
    Region: Choose closest to you
    Branch: main
-   Root Directory: backend
+   Root Directory: backend          ⚠️ IMPORTANT: Must be "backend"
    Runtime: Python 3
    Build Command: pip install -r requirements.txt
    Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
