@@ -38,7 +38,7 @@ BizIntel AI is a production-ready SaaS platform that provides AI-powered busines
 **AI/ML:**
 - OpenAI text-embedding-3-small (1536d)
 - Sentence-transformers (fallback, 384d)
-- Multi-agent orchestration
+- Multi-agents orchestration
 - RAG pipeline with citations
 
 
