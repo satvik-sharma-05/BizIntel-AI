@@ -231,12 +231,13 @@ async def upload_document(
         document_id = str(uuid.uuid4())
         print(f"🆔 Generated document ID: {document_id}")
         
-        # Save file to disk
+        # Save file to disk (async to avoid blocking)
         file_path = UPLOAD_DIR / f"{document_id}{file_ext}"
         print(f"💾 Saving file to: {file_path}")
         
-        with open(file_path, "wb") as f:
-            f.write(content)
+        import aiofiles
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(content)
         print(f"✅ File saved successfully")
         
         # Store initial metadata in MongoDB
