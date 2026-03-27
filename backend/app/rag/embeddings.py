@@ -1,54 +1,54 @@
 """
-Embeddings - Generate embeddings for text chunks using sentence-transformers
+Embeddings - Fast, lightweight embeddings using HashingVectorizer
+No heavy ML models - perfect for free tier deployment
 """
 from typing import List
 import numpy as np
 import os
+import pickle
+from pathlib import Path
+from sklearn.feature_extraction.text import HashingVectorizer
 
-# Global model instance (lazy loaded)
-_model = None
+# Global vectorizer instance
+_vectorizer = None
 
-def _get_model():
-    """Lazy load the sentence-transformers model"""
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-        print(f"🔄 Loading embedding model: {model_name}")
-        _model = SentenceTransformer(model_name)
-        print(f"✅ Model loaded successfully")
-    return _model
+def _get_vectorizer():
+    """Get or create HashingVectorizer"""
+    global _vectorizer
+    if _vectorizer is None:
+        # Get dimension from .env
+        n_features = int(os.getenv("EMBEDDING_DIMENSION", "384"))
+        
+        print(f"🔄 Initializing HashingVectorizer (dimension: {n_features})")
+        _vectorizer = HashingVectorizer(
+            n_features=n_features,
+            alternate_sign=False,  # All positive values
+            norm='l2'  # L2 normalization for better similarity
+        )
+        print(f"✅ HashingVectorizer ready")
+    return _vectorizer
 
 def generate_embeddings(texts: List[str], batch_size: int = 32) -> np.ndarray:
     """
-    Generate embeddings for text chunks using sentence-transformers
+    Generate embeddings using HashingVectorizer
+    Fast, lightweight, no training required
     
     Args:
         texts: List of text chunks
-        batch_size: Number of texts to process at once
+        batch_size: Not used (kept for compatibility)
     
     Returns:
         Numpy array of embeddings
     """
     try:
-        print(f"🧠 Generating embeddings for {len(texts)} texts...")
+        print(f"🧠 Generating embeddings for {len(texts)} texts using HashingVectorizer...")
         
-        # Get model (lazy loaded)
-        model = _get_model()
+        # Get vectorizer
+        vectorizer = _get_vectorizer()
         
-        # Generate embeddings in batches
-        all_embeddings = []
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            batch_num = i//batch_size + 1
-            total_batches = (len(texts) + batch_size - 1)//batch_size
-            
-            print(f"   Batch {batch_num}/{total_batches}: {len(batch)} texts")
-            batch_embeddings = model.encode(batch, show_progress_bar=False)
-            all_embeddings.append(batch_embeddings)
+        # Generate embeddings (very fast)
+        embeddings = vectorizer.transform(texts).toarray()
         
-        # Concatenate all batches
-        embeddings = np.vstack(all_embeddings)
         print(f"✅ Generated {len(embeddings)} embeddings (shape: {embeddings.shape})")
         return embeddings
     

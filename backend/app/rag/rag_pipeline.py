@@ -27,7 +27,7 @@ class RAGPipeline:
         top_k: int = None
     ) -> Dict[str, Any]:
         """
-        Query RAG system with optimized retrieval
+        Query RAG system with hybrid search (FAISS + BM25)
         
         Args:
             question: User question
@@ -54,11 +54,13 @@ class RAGPipeline:
                 self._embedding_cache.clear()
             self._embedding_cache[cache_key] = query_embedding
         
-        # Search vector store (FAISS is fast)
+        # Hybrid search: FAISS + BM25
         relevant_chunks = self.vector_store.search(
             query_embedding,
             top_k=top_k,
-            business_id=business_id
+            business_id=business_id,
+            query_text=question,  # For BM25 search
+            use_hybrid=True  # Enable hybrid search
         )
         
         if not relevant_chunks:

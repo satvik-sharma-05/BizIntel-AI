@@ -1,14 +1,16 @@
 """
-Vector Store - FAISS vector database for similarity search
+Vector Store - FAISS vector database with BM25 hybrid search
+Lightweight, fast, perfect for free tier deployment
 """
 import os
 import pickle
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 from pathlib import Path
+from rank_bm25 import BM25Okapi
 
 class VectorStore:
-    """FAISS-based vector store for document chunks"""
+    """FAISS-based vector store with BM25 hybrid search"""
     
     def __init__(self, store_path: str = None):
         """
@@ -27,6 +29,7 @@ class VectorStore:
         self.index = None
         self.metadata = []
         self.dimension = None
+        self.bm25 = None  # BM25 index for hybrid search
         self._initialized = False
     
     def _ensure_initialized(self):
@@ -48,18 +51,26 @@ class VectorStore:
             
             index_path = self.store_path / "index.faiss"
             metadata_path = self.store_path / "metadata.pkl"
+            bm25_path = self.store_path / "bm25.pkl"
             
             if index_path.exists() and metadata_path.exists():
                 # Load existing
                 self.index = faiss.read_index(str(index_path))
                 with open(metadata_path, 'rb') as f:
                     self.metadata = pickle.load(f)
-                print(f"Loaded existing vector store with {len(self.metadata)} chunks")
+                
+                # Load BM25 if exists
+                if bm25_path.exists():
+                    with open(bm25_path, 'rb') as f:
+                        self.bm25 = pickle.load(f)
+                
+                print(f"✅ Loaded vector store with {len(self.metadata)} chunks")
             else:
                 # Create new
                 self.index = faiss.IndexFlatL2(self.dimension)
                 self.metadata = []
-                print("Created new vector store")
+                self.bm25 = None
+                print("✅ Created new vector store")
         
         except ImportError:
             raise Exception("faiss-cpu not installed. Install with: pip install faiss-cpu")
@@ -73,7 +84,7 @@ class VectorStore:
         filename: str
     ):
         """
-        Add document chunks to vector store
+        Add document chunks to vector store with BM25 indexing
         
         Args:
             chunks: List of text chunks with metadata
@@ -99,22 +110,40 @@ class VectorStore:
                 "vector_id": len(self.metadata)
             })
         
+        # Rebuild BM25 index with all texts
+        self._rebuild_bm25()
+        
         # Save to disk
         self._save_index()
+    
+    def _rebuild_bm25(self):
+        """Rebuild BM25 index from all metadata"""
+        if not self.metadata:
+            self.bm25 = None
+            return
+        
+        # Tokenize all texts for BM25
+        tokenized_corpus = [meta["text"].lower().split() for meta in self.metadata]
+        self.bm25 = BM25Okapi(tokenized_corpus)
+        print(f"✅ BM25 index rebuilt with {len(tokenized_corpus)} documents")
     
     def search(
         self,
         query_embedding: np.ndarray,
         top_k: int = 5,
-        business_id: str = None
+        business_id: str = None,
+        query_text: str = None,
+        use_hybrid: bool = True
     ) -> List[Dict[str, Any]]:
         """
-        Search for similar chunks
+        Hybrid search using FAISS + BM25
         
         Args:
-            query_embedding: Query embedding
+            query_embedding: Query embedding for FAISS search
             top_k: Number of results to return
             business_id: Filter by business ID
+            query_text: Query text for BM25 search
+            use_hybrid: Use hybrid search (FAISS + BM25)
         
         Returns:
             List of matching chunks with scores
@@ -124,12 +153,12 @@ class VectorStore:
         if len(self.metadata) == 0:
             return []
         
-        # Search FAISS index
+        # FAISS vector search
         query_embedding = query_embedding.reshape(1, -1).astype('float32')
         distances, indices = self.index.search(query_embedding, min(top_k * 3, len(self.metadata)))
         
-        # Filter and format results
-        results = []
+        # Get FAISS results
+        faiss_results = {}
         for dist, idx in zip(distances[0], indices[0]):
             if idx < len(self.metadata):
                 chunk = self.metadata[idx].copy()
@@ -138,14 +167,52 @@ class VectorStore:
                 if business_id and chunk["business_id"] != business_id:
                     continue
                 
-                chunk["score"] = float(dist)
-                chunk["similarity"] = 1 / (1 + float(dist))  # Convert distance to similarity
-                results.append(chunk)
-                
-                if len(results) >= top_k:
-                    break
+                faiss_score = 1 / (1 + float(dist))  # Convert distance to similarity
+                faiss_results[idx] = {
+                    "chunk": chunk,
+                    "faiss_score": faiss_score,
+                    "bm25_score": 0.0
+                }
         
-        return results
+        # BM25 search if query text provided and hybrid enabled
+        if use_hybrid and query_text and self.bm25:
+            tokenized_query = query_text.lower().split()
+            bm25_scores = self.bm25.get_scores(tokenized_query)
+            
+            # Add BM25 scores to results
+            for idx, score in enumerate(bm25_scores):
+                if idx in faiss_results:
+                    faiss_results[idx]["bm25_score"] = float(score)
+                elif score > 0:  # Add high BM25 matches even if not in FAISS top results
+                    chunk = self.metadata[idx].copy()
+                    
+                    # Filter by business_id
+                    if business_id and chunk["business_id"] != business_id:
+                        continue
+                    
+                    faiss_results[idx] = {
+                        "chunk": chunk,
+                        "faiss_score": 0.0,
+                        "bm25_score": float(score)
+                    }
+        
+        # Combine scores (weighted average)
+        results = []
+        for idx, data in faiss_results.items():
+            # Hybrid score: 60% FAISS + 40% BM25
+            hybrid_score = 0.6 * data["faiss_score"] + 0.4 * data["bm25_score"]
+            
+            chunk = data["chunk"]
+            chunk["score"] = hybrid_score
+            chunk["faiss_score"] = data["faiss_score"]
+            chunk["bm25_score"] = data["bm25_score"]
+            chunk["similarity"] = hybrid_score
+            results.append(chunk)
+        
+        # Sort by hybrid score
+        results.sort(key=lambda x: x["score"], reverse=True)
+        
+        return results[:top_k]
     
     def delete_document(self, document_id: str):
         """Delete all chunks for a document"""
@@ -166,6 +233,7 @@ class VectorStore:
         
         if not self.metadata:
             self.index = faiss.IndexFlatL2(self.dimension)
+            self.bm25 = None
             self._save_index()
             return
         
@@ -181,19 +249,27 @@ class VectorStore:
         for i, meta in enumerate(self.metadata):
             meta["vector_id"] = i
         
+        # Rebuild BM25
+        self._rebuild_bm25()
+        
         self._save_index()
     
     def _save_index(self):
-        """Save index and metadata to disk"""
+        """Save index, metadata, and BM25 to disk"""
         import faiss
         
         index_path = self.store_path / "index.faiss"
         metadata_path = self.store_path / "metadata.pkl"
+        bm25_path = self.store_path / "bm25.pkl"
         
         faiss.write_index(self.index, str(index_path))
         
         with open(metadata_path, 'wb') as f:
             pickle.dump(self.metadata, f)
+        
+        if self.bm25:
+            with open(bm25_path, 'wb') as f:
+                pickle.dump(self.bm25, f)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get vector store statistics"""
@@ -202,7 +278,8 @@ class VectorStore:
         return {
             "total_chunks": len(self.metadata),
             "total_documents": len(set(m["document_id"] for m in self.metadata)),
-            "dimension": self.dimension
+            "dimension": self.dimension,
+            "has_bm25": self.bm25 is not None
         }
 
 # Global vector store instance
