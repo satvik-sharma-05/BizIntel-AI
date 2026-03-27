@@ -24,9 +24,12 @@ app.add_middleware(
 # Startup
 @app.on_event("startup")
 async def startup_event():
+    print("=" * 80)
     print(f"🚀 {settings.APP_NAME} Backend Starting...")
     print(f"📍 Backend URL: {settings.BACKEND_URL}")
     print(f"📍 Frontend URL: {settings.FRONTEND_URL}")
+    print(f"🔧 Debug Mode: {settings.DEBUG}")
+    print("=" * 80)
     
     # Connect to databases in background (non-blocking)
     try:
@@ -41,15 +44,21 @@ async def startup_event():
     except Exception as e:
         print(f"⚠️  Neo4j connection failed (will retry): {e}")
     
-    print(f"✅ Server ready on port $PORT")
+    print("=" * 80)
+    print(f"✅ Server ready and listening")
     print(f"💾 Databases: MongoDB + Neo4j + FAISS")
+    print(f"📡 Health check: {settings.BACKEND_URL}/health")
+    print("=" * 80)
 
 # Shutdown
 @app.on_event("shutdown")
 async def shutdown_event():
+    print("=" * 80)
+    print("👋 Backend Shutting Down...")
+    print("=" * 80)
     await close_mongodb()
     neo4j_client.close()
-    print("👋 Backend Shutdown")
+    print("✅ Shutdown complete")
 
 # Routes
 app.include_router(auth.router, prefix="/api", tags=["Authentication"])
@@ -77,10 +86,14 @@ async def root():
 async def health():
     return {"status": "healthy", "database": "MongoDB"}
 
+# This block is only for local development
+# On Render, uvicorn is started via the start command in render.yaml
 if __name__ == "__main__":
+    import os
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=settings.DEBUG
     )
