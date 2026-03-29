@@ -1,7 +1,7 @@
 <div align="center">
 
 # 🚀 BizIntel AI
-https://biz-intel-ai-two.vercel.app/dashboard
+https://biz-intel-ai-two.vercel.app
 ### *Intelligent Business Decision Platform*
 
 [![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-Visit_Now-blue?style=for-the-badge)](https://biz-intel-ai-two.vercel.app)
