@@ -23,6 +23,8 @@ https://biz-intel-ai-two.vercel.app
 - **Smart Retrieval**: 40% semantic (FAISS) + 30% keyword (BM25) + 30% graph (Neo4j)
 - **Knowledge Graph**: Entity extraction and relationship mapping
 - **Document Modes**: Document-only or hybrid AI analysis
+#### Uses Neo4j :
+<img width="1917" height="860" alt="image" src="https://github.com/user-attachments/assets/54865108-bea9-4d42-b691-2c5ce5379450" />
 
 ### 📊 **Business Intelligence**
 - **Market Analysis**: Industry trends, competition, and opportunities
